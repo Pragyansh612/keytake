@@ -149,13 +149,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} min-h-screen flex flex-col`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AnimatedBackground type="particles" intensity="medium" />
+          <AuthProvider>
           <Header />
           <Suspense>
-            <main className="flex-grow"><AuthProvider>
+            <main className="flex-grow">
               {children}
-            </AuthProvider></main>
+            </main>
           </Suspense>
           <Footer />
+          </AuthProvider>
           <Analytics />
         </ThemeProvider>
 

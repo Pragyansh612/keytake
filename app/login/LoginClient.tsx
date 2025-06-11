@@ -28,18 +28,44 @@ export default function LoginClient() {
     setIsLoading(true)
 
     try {
-      const { error } = await signIn(email, password)
+      const { error, data } = await signIn(email, password)
       
       if (error) {
-        toast.error(error.message || "Failed to sign in")
+        console.error('Login error:', error)
+        
+        // Handle specific error messages
+        let errorMessage = "Failed to sign in"
+        
+        if (error.message) {
+          if (error.message.includes('Invalid login credentials')) {
+            errorMessage = "Invalid email or password"
+          } else if (error.message.includes('Email not confirmed')) {
+            errorMessage = "Please check your email and confirm your account"
+          } else if (error.message.includes('Too many requests')) {
+            errorMessage = "Too many login attempts. Please wait a moment and try again"
+          } else {
+            errorMessage = error.message
+          }
+        }
+        
+        toast.error(errorMessage)
         setIsLoading(false)
         return
       }
       
-      toast.success("Successfully signed in!")
-      router.push("/dashboard")
+      if (data?.user) {
+        toast.success("Successfully signed in!")
+        
+        // With @supabase/ssr, we can use normal navigation
+        router.push("/dashboard")
+        
+      } else {
+        toast.error("Login failed - no user data received")
+        setIsLoading(false)
+      }
     } catch (error: any) {
-      toast.error(error.message || "An unexpected error occurred")
+      console.error('Unexpected login error:', error)
+      toast.error(error?.message || "An unexpected error occurred")
       setIsLoading(false)
     }
   }

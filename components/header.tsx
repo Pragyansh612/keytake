@@ -9,6 +9,7 @@ import { Menu, X } from "lucide-react"
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useTheme } from "next-themes"
+import { useAuth } from "@/context/AuthContext"
 
 const navigation = [
   { name: "Home", href: "/" },
@@ -24,6 +25,7 @@ export function Header() {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
   const [mounted, setMounted] = useState(false)
+  const { user, profile, signOut } = useAuth()
 
   useEffect(() => {
     setMounted(true)
@@ -42,7 +44,7 @@ export function Header() {
     <header
       className={cn(
         "sticky top-0 z-50 w-full transition-all duration-500",
-        scrolled ? "border-b border-foreground/10 bg-background/80 backdrop-blur-xl" : "bg-transparent",
+        scrolled || mobileMenuOpen ? "border-b border-foreground/10 bg-background/95 backdrop-blur-xl" : "bg-background/80 backdrop-blur-sm md:bg-transparent",
       )}
     >
       <div className="container flex h-20 items-center justify-between">
@@ -114,17 +116,35 @@ export function Header() {
         <div className="flex items-center gap-4">
           <ThemeToggle />
           <div className="hidden md:flex gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="h-10 px-5 border-foreground/20 hover:border-foreground/80 shadow-sm hover:shadow-md transition-all"
-            >
-              <Link href="/login">Log in</Link>
-            </Button>
-            <Button size="sm" asChild className="h-10 px-5 shadow-sm hover:shadow-md transition-all">
-              <Link href="/signup">Sign up</Link>
-            </Button>
+            {user && profile ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-foreground/80">
+                  Welcome, {profile.name}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={signOut}
+                  className="h-10 px-5 border-foreground/20 hover:border-foreground/80 shadow-sm hover:shadow-md transition-all"
+                >
+                  Sign out
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="h-10 px-5 border-foreground/20 hover:border-foreground/80 shadow-sm hover:shadow-md transition-all"
+                >
+                  <Link href="/login">Log in</Link>
+                </Button>
+                <Button size="sm" asChild className="h-10 px-5 shadow-sm hover:shadow-md transition-all">
+                  <Link href="/signup">Sign up</Link>
+                </Button>
+              </>
+            )}
           </div>
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(true)}>
             <Menu className="h-5 w-5" />
@@ -174,16 +194,36 @@ export function Header() {
                   </Link>
                 ))}
                 <div className="h-px w-full bg-foreground/10 my-2" />
-                <Link
-                  href="/login"
-                  className="text-base font-medium py-2 text-foreground/70 hover:text-foreground"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Log in
-                </Link>
-                <Button className="mt-2" onClick={() => setMobileMenuOpen(false)} asChild>
-                  <Link href="/signup">Sign up</Link>
-                </Button>
+                {user && profile ? (
+                  <div className="space-y-2">
+                    <div className="text-base font-medium py-2 text-foreground">
+                      Welcome, {profile.name}
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        signOut();
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      Sign out
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      className="text-base font-medium py-2 text-foreground/70 hover:text-foreground"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Log in
+                    </Link>
+                    <Button className="mt-2" onClick={() => setMobileMenuOpen(false)} asChild>
+                      <Link href="/signup">Sign up</Link>
+                    </Button>
+                  </>
+                )}
               </nav>
             </motion.div>
           </motion.div>

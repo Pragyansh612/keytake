@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { Database } from '@/types/supabase';
 
@@ -26,7 +26,7 @@ type AuthContextType = {
     error: any | null;
     data: any | null;
   }>;
-  updateProfile: (profile: Partial<UserProfile>) => Promise<{
+  updateProfile: (profile: Partial<Omit<UserProfile, 'name'>> & { name?: string | null }) => Promise<{
     error: any | null;
     data: any | null;
   }>;
@@ -35,14 +35,14 @@ type AuthContextType = {
 export type SignUpData = {
   email: string;
   password: string;
-  name?: string | null; // Change to allow null
+  name: string;
   userType: string;
-  university?: string | null; // Change to allow null
-  fieldOfStudy?: string | null; // Change to allow null
-  yearSemester?: string | null; // Change to allow null
-  industry?: string | null; // Change to allow null
-  role?: string | null; // Change to allow null
-  useCase?: string | null; // Change to allow null
+  university?: string | null;
+  fieldOfStudy?: string | null;
+  yearSemester?: string | null;
+  industry?: string | null;
+  role?: string | null;
+  useCase?: string | null;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,17 +53,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const supabase = createClient();
 
   // Fetch user profile from the database
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
-        .maybeSingle(); // Use maybeSingle instead of single to handle no results
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') { // Ignore "no rows returned" error
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching profile:', error);
         return null;
       }
@@ -77,15 +78,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const setupUser = async (session: Session | null) => {
+      setLoading(true);
+      
       if (session?.user) {
-        // Fetch the user profile
         const userProfile = await fetchProfile(session.user.id);
         setProfile(userProfile);
+        setUser(session.user);
       } else {
         setProfile(null);
+        setUser(null);
       }
+      
       setSession(session);
-      setUser(session?.user ?? null);
       setLoading(false);
     };
 
@@ -97,25 +101,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
         await setupUser(session);
+        
+        // Force router refresh on auth changes to sync with middleware
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          router.refresh();
+        }
       }
     );
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router, supabase.auth]);
 
   const signIn = async (email: string, password: string) => {
     try {
-      const result = await supabase.auth.signInWithPassword({ email, password });
+      console.log('Attempting sign in for:', email);
+      
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email: email.trim(), 
+        password 
+      });
 
-      if (result.data.session) {
-        const userProfile = await fetchProfile(result.data.session.user.id);
-        setProfile(userProfile);
+      console.log('Sign in result:', { data: !!data, error });
+
+      if (error) {
+        console.error('Sign in error:', error);
+        return { error, data: null };
       }
 
-      return result;
+      if (data.session?.user) {
+        console.log('Sign in successful, fetching profile...');
+        const userProfile = await fetchProfile(data.session.user.id);
+        setProfile(userProfile);
+        setUser(data.session.user);
+        setSession(data.session);
+      }
+
+      return { error: null, data };
     } catch (error) {
       console.error('Error in signIn:', error);
       return { error, data: null };
@@ -130,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password: formData.password,
         options: {
           data: {
-            name: formData.name || null, // Add name here
+            name: formData.name,
             user_type: formData.userType,
           },
         },
@@ -141,55 +166,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Wait briefly for the database trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Increased wait time
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Update user profile in the database
-      // Replace the update section in signUp function with this:
-if (authData.user) {
-  const userId = authData.user.id;
+      if (authData.user) {
+        const userId = authData.user.id;
 
-  // Prepare profile data based on user type
-  const profileData: any = {
-    id: userId,
-    email: formData.email,
-    user_type: formData.userType,
-    name: formData.name || null,
-  };
+        // Prepare profile data based on user type
+        const profileData: any = {
+          id: userId,
+          email: formData.email,
+          user_type: formData.userType,
+          name: formData.name,
+        };
 
-  if (formData.userType === 'student') {
-    profileData.institution = formData.university || null;
-    profileData.field_of_study = formData.fieldOfStudy || null;
-    profileData.year_semester = formData.yearSemester || null;
-  } else if (formData.userType === 'professional') {
-    profileData.industry = formData.industry || null;
-    profileData.role_position = formData.role || null;
-    profileData.use_case = formData.useCase || null;
-  } else {
-    profileData.use_case = formData.useCase || null;
-  }
+        if (formData.userType === 'student') {
+          profileData.institution = formData.university || null;
+          profileData.field_of_study = formData.fieldOfStudy || null;
+          profileData.year_semester = formData.yearSemester || null;
+        } else if (formData.userType === 'professional') {
+          profileData.industry = formData.industry || null;
+          profileData.role_position = formData.role || null;
+          profileData.use_case = formData.useCase || null;
+        } else {
+          profileData.use_case = formData.useCase || null;
+        }
 
-  // Instead of update, use upsert operation
-  const { error: upsertError } = await supabase
-    .from('users')
-    .upsert(profileData, { 
-      onConflict: 'id',
-      ignoreDuplicates: false 
-    });
+        // Use upsert operation
+        const { error: upsertError } = await supabase
+          .from('users')
+          .upsert(profileData, { 
+            onConflict: 'id',
+            ignoreDuplicates: false 
+          });
 
-  if (upsertError) {
-    console.error('Error upserting profile:', upsertError);
-    return { error: upsertError, data: authData };
-  }
+        if (upsertError) {
+          console.error('Error upserting profile:', upsertError);
+          return { error: upsertError, data: authData };
+        }
 
-  // Add a delay before fetching the profile
-  await new Promise(resolve => setTimeout(resolve, 1000));
+        // Add a delay before fetching the profile
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-  // Fetch the updated profile
-  const newProfile = await fetchProfile(userId);
-  if (newProfile) {
-    setProfile(newProfile);
-  }
-}
+        // Fetch the updated profile
+        const newProfile = await fetchProfile(userId);
+        if (newProfile) {
+          setProfile(newProfile);
+        }
+      }
 
       return { error: null, data: authData };
     } catch (error) {
@@ -202,7 +225,10 @@ if (authData.user) {
     try {
       await supabase.auth.signOut();
       setProfile(null);
+      setUser(null);
+      setSession(null);
       router.push('/');
+      router.refresh(); // Force refresh to sync with middleware
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -220,7 +246,7 @@ if (authData.user) {
     }
   };
 
-  const updateProfile = async (profileData: Partial<UserProfile>) => {
+  const updateProfile = async (profileData: Partial<Omit<UserProfile, 'name'>> & { name?: string | null }) => {
     if (!user) {
       return { error: 'No user logged in', data: null };
     }
