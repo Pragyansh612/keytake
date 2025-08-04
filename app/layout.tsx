@@ -5,7 +5,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { AnimatedBackground } from "@/components/animated-background"
+// import { AnimatedBackground } from "@/components/animated-background"
 import { Analytics } from "@/components/analytics"
 import { Suspense } from "react"
 import Script from "next/script"
@@ -148,7 +148,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${inter.className} min-h-screen flex flex-col`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AnimatedBackground type="particles" intensity="medium" />
+          {/* <AnimatedBackground type="particles" intensity="medium" /> */}
           <AuthProvider>
           <Header />
           <Suspense>
