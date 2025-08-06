@@ -117,25 +117,26 @@ export function SignupClientPage() {
           return;
         }
       
+        // Map form data to match backend expectations
         const signUpData: SignUpData = {
           email: formData.email,
           password: formData.password,
           name: formData.name,
           userType: formData.userType,
-          university: formData.university,
-          fieldOfStudy: formData.fieldOfStudy,
-          yearSemester: formData.yearSemester,
-          industry: formData.industry,
-          role: formData.role,
-          useCase: formData.useCase,
+          university: formData.university || null,
+          fieldOfStudy: formData.fieldOfStudy || null,
+          yearSemester: formData.yearSemester || null,
+          industry: formData.industry || null,
+          role: formData.role || null,
+          useCase: formData.useCase || null,
         }
 
-        const { error, data } = await signUp(signUpData)
+        const { error } = await signUp(signUpData)
 
         if (error) {
           setErrors((prev) => ({ ...prev, form: error.message }))
         } else {
-          // Redirect to dashboard or confirmation page
+          // Redirect to dashboard after successful signup and login
           router.push("/dashboard")
         }
       } catch (err: any) {

@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
-import LoginClient from "./LoginClient"
+import { LoginClientPage } from "./LoginClient"
 
 export const metadata: Metadata = {
-  title: "Login",
-  description: "Sign in to your Keytake account",
+  title: "Sign In",
+  description: "Sign in to your Keytake account and continue your learning journey.",
 }
 
 export default function LoginPage() {
-  return <LoginClient />
+  return <LoginClientPage />
 }
