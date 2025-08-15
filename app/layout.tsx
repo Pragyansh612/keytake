@@ -5,7 +5,6 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-// import { AnimatedBackground } from "@/components/animated-background"
 import { Analytics } from "@/components/analytics"
 import { Suspense } from "react"
 import Script from "next/script"
@@ -316,15 +315,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           >
             Skip to main content
           </a>
-
-          {/* Optional animated background */}
-          {/* <AnimatedBackground type="particles" intensity="medium" /> */}
           
           <AuthProvider>
             <Header />
             
             <Suspense fallback={<LoadingSpinner />}>
-              <main id="main-content" className="flex-grow relative">
+              <main id="main-content" className="flex-grow">
                 {children}
               </main>
             </Suspense>

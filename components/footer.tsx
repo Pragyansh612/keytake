@@ -1,10 +1,22 @@
+"use client"
+
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Twitter, Github, Linkedin, Mail } from "lucide-react"
 
 export function Footer() {
+  const pathname = usePathname()
   const currentYear = new Date().getFullYear()
+  
+  // Check if we're on a dashboard page to hide footer
+  const isDashboardPage = pathname?.startsWith('/dashboard')
+
+  // Don't render footer on dashboard pages
+  if (isDashboardPage) {
+    return null
+  }
 
   return (
     <footer className="border-t border-foreground/10 mt-20 py-16">

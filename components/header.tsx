@@ -13,7 +13,6 @@ import { useAuth } from "@/context/AuthContext"
 
 const navigation = [
   { name: "Home", href: "/" },
-  { name: "Dashboard", href: "/dashboard" },
   { name: "Explore", href: "/explore" },
   { name: "About", href: "/about" },
 ]
@@ -24,13 +23,26 @@ export function Header() {
   const [scrolled, setScrolled] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const { resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
   const [mounted, setMounted] = useState(false)
   const { user, profile, signOut, loading } = useAuth()
   const userMenuRef = useRef<HTMLDivElement>(null)
-
+  
+  // Check if we're on a dashboard page to hide header/footer
+  const isDashboardPage = pathname?.startsWith('/dashboard')
+  const isDark = resolvedTheme === "dark"
+  
   // Get display name - prefer profile name, fallback to email
   const displayName = profile?.name || user?.email?.split('@')[0] || 'User'
+
+  // Add Dashboard to navigation only if user is logged in
+  const navigationItems = user 
+    ? [
+        { name: "Home", href: "/" },
+        { name: "Dashboard", href: "/dashboard" },
+        { name: "Explore", href: "/explore" },
+        { name: "About", href: "/about" },
+      ]
+    : navigation
 
   useEffect(() => {
     setMounted(true)
@@ -93,8 +105,8 @@ export function Header() {
     }
   }
 
-  // Don't render until mounted to avoid hydration issues
-  if (!mounted) {
+  // Don't render until mounted to avoid hydration issues OR if on dashboard page
+  if (!mounted || isDashboardPage) {
     return null
   }
 
@@ -121,7 +133,7 @@ export function Header() {
               </Link>
 
               {/* Orbital effect for dark mode */}
-              {mounted && isDark && (
+              {isDark && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -157,7 +169,7 @@ export function Header() {
 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex gap-8 xl:gap-10">
-              {navigation.map((item) => (
+              {navigationItems.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
@@ -323,7 +335,7 @@ export function Header() {
 
                 {/* Navigation */}
                 <nav className="flex-1 p-4 space-y-1">
-                  {navigation.map((item) => (
+                  {navigationItems.map((item) => (
                     <Link
                       key={item.name}
                       href={item.href}

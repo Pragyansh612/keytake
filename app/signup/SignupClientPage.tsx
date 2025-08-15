@@ -13,7 +13,7 @@ import { useAuth, SignUpData } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 
-type UserType = "student" | "professional" | "researcher" | "educator" | "other"
+type UserType = "student" | "professional" | "researcher" | "other"
 
 interface UserFormData {
   email: string
@@ -387,8 +387,8 @@ export function SignupClientPage() {
                           <SelectContent>
                             <SelectItem value="student">Student</SelectItem>
                             <SelectItem value="professional">Professional</SelectItem>
-                            <SelectItem value="researcher">Researcher</SelectItem>
-                            <SelectItem value="educator">Educator</SelectItem>
+                            {/* <SelectItem value="researcher">Researcher</SelectItem> */}
+                            {/* <SelectItem value="educator">Educator</SelectItem> */}
                             <SelectItem value="other">Other</SelectItem>
                           </SelectContent>
                         </Select>

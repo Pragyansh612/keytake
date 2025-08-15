@@ -145,238 +145,234 @@ export default function NotesPage() {
 
   if (loading && !refreshing) {
     return (
-      <div className="container py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-muted-foreground">Loading your notes...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-muted-foreground">Loading your notes...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container py-8">
-      <div className="flex flex-col gap-8">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div className="flex items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">Notes Library</h1>
-              <p className="text-muted-foreground mt-1">Organize and manage your learning materials</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 w-full lg:w-auto">
-            <div className="relative flex-1 lg:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search notes by title..." 
-                className="pl-9 bg-background/50 border-foreground/20" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-
-            <div className="flex items-center gap-2 border border-foreground/20 rounded-lg p-1">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="h-8 w-8 p-0"
-              >
-                <Grid3X3 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="h-8 w-8 p-0"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => loadNotes(true)}
-              disabled={refreshing}
-              className="border-foreground/20 hover:border-foreground/60"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </Button>
-            
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="shadow-sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Note
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>Create New Note</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-6 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="video-url">YouTube Video URL</Label>
-                    <Input
-                      id="video-url"
-                      placeholder="https://www.youtube.com/watch?v=..."
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      className="h-11"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="video-title">Video Title</Label>
-                    <Input
-                      id="video-title"
-                      placeholder="Enter the video title"
-                      value={videoTitle}
-                      onChange={(e) => setVideoTitle(e.target.value)}
-                      className="h-11"
-                    />
-                  </div>
-                  <Button 
-                    onClick={handleCreateNote} 
-                    className="w-full h-11"
-                    disabled={isCreating || !videoUrl.trim() || !videoTitle.trim()}
-                  >
-                    {isCreating ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Creating Note...
-                      </>
-                    ) : (
-                      "Create Note"
-                    )}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Notes Library</h1>
+            <p className="text-muted-foreground mt-1">Organize and manage your learning materials</p>
           </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <TabsList className="grid w-full md:w-auto grid-cols-5 md:grid-cols-5">
-              <TabsTrigger value="all" className="text-xs md:text-sm">
-                All ({counts.all})
-              </TabsTrigger>
-              <TabsTrigger value="recent" className="text-xs md:text-sm">
-                Recent ({counts.recent})
-              </TabsTrigger>
-              <TabsTrigger value="public" className="text-xs md:text-sm">
-                Public ({counts.public})
-              </TabsTrigger>
-              <TabsTrigger value="private" className="text-xs md:text-sm">
-                Private ({counts.private})
-              </TabsTrigger>
-              <TabsTrigger value="folders" className="text-xs md:text-sm">
-                Folders ({counts.folders})
-              </TabsTrigger>
-            </TabsList>
+        <div className="flex items-center gap-4 w-full lg:w-auto">
+          <div className="relative flex-1 lg:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search notes by title..." 
+              className="pl-9 bg-background/50 border-foreground/20" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
 
-            <Button variant="outline" size="sm" className="gap-2 border-foreground/20">
-              <Filter className="h-4 w-4" />
-              Filter
+          <div className="flex items-center gap-2 border border-foreground/20 rounded-lg p-1">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="h-8 w-8 p-0"
+            >
+              <Grid3X3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="h-8 w-8 p-0"
+            >
+              <List className="h-4 w-4" />
             </Button>
           </div>
 
-          {/* Empty State Component */}
-          {filteredNotes.length === 0 && (
-            <div className="mt-8">
-              <GlassPanel className="p-12 text-center">
-                <div className="flex flex-col items-center gap-6">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
-                    <FolderOpen className="h-10 w-10 text-muted-foreground" />
-                  </div>
-                  <div className="max-w-md">
-                    <h3 className="text-xl font-semibold mb-2">
-                      {searchQuery ? "No notes match your search" : "No notes found"}
-                    </h3>
-                    <p className="text-muted-foreground mb-6">
-                      {searchQuery 
-                        ? "Try adjusting your search terms or browse all notes." 
-                        : "Create your first note from a YouTube video to get started with AI-powered learning."
-                      }
-                    </p>
-                    {!searchQuery && (
-                      <Button onClick={() => setIsCreateDialogOpen(true)} className="shadow-sm">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Your First Note
-                      </Button>
-                    )}
-                  </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => loadNotes(true)}
+            disabled={refreshing}
+            className="border-foreground/20 hover:border-foreground/60"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </Button>
+          
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="shadow-sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Note
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Create New Note</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-6 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="video-url">YouTube Video URL</Label>
+                  <Input
+                    id="video-url"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    className="h-11"
+                  />
                 </div>
-              </GlassPanel>
-            </div>
-          )}
-
-          {/* Notes Grid/List */}
-          {filteredNotes.length > 0 && (
-            <>
-              <TabsContent value="all" className="mt-8">
-                <NotesDisplay 
-                  notes={filteredNotes} 
-                  viewMode={viewMode}
-                  onNoteClick={handleNoteClick}
-                  onPrivacyChange={handlePrivacyChange}
-                  onDelete={handleNoteDelete}
-                />
-              </TabsContent>
-
-              <TabsContent value="recent" className="mt-8">
-                <NotesDisplay 
-                  notes={filteredNotes} 
-                  viewMode={viewMode}
-                  onNoteClick={handleNoteClick}
-                  onPrivacyChange={handlePrivacyChange}
-                  onDelete={handleNoteDelete}
-                  badge="Recent"
-                />
-              </TabsContent>
-
-              <TabsContent value="public" className="mt-8">
-                <NotesDisplay 
-                  notes={filteredNotes} 
-                  viewMode={viewMode}
-                  onNoteClick={handleNoteClick}
-                  onPrivacyChange={handlePrivacyChange}
-                  onDelete={handleNoteDelete}
-                  badge="Public"
-                />
-              </TabsContent>
-
-              <TabsContent value="private" className="mt-8">
-                <NotesDisplay 
-                  notes={filteredNotes} 
-                  viewMode={viewMode}
-                  onNoteClick={handleNoteClick}
-                  onPrivacyChange={handlePrivacyChange}
-                  onDelete={handleNoteDelete}
-                  badge="Private"
-                />
-              </TabsContent>
-
-              <TabsContent value="folders" className="mt-8">
-                <NotesDisplay 
-                  notes={filteredNotes} 
-                  viewMode={viewMode}
-                  onNoteClick={handleNoteClick}
-                  onPrivacyChange={handlePrivacyChange}
-                  onDelete={handleNoteDelete}
-                  badge="Organized"
-                />
-              </TabsContent>
-            </>
-          )}
-        </Tabs>
+                <div className="space-y-2">
+                  <Label htmlFor="video-title">Video Title</Label>
+                  <Input
+                    id="video-title"
+                    placeholder="Enter the video title"
+                    value={videoTitle}
+                    onChange={(e) => setVideoTitle(e.target.value)}
+                    className="h-11"
+                  />
+                </div>
+                <Button 
+                  onClick={handleCreateNote} 
+                  className="w-full h-11"
+                  disabled={isCreating || !videoUrl.trim() || !videoTitle.trim()}
+                >
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating Note...
+                    </>
+                  ) : (
+                    "Create Note"
+                  )}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <TabsList className="grid w-full md:w-auto grid-cols-5 md:grid-cols-5">
+            <TabsTrigger value="all" className="text-xs md:text-sm">
+              All ({counts.all})
+            </TabsTrigger>
+            <TabsTrigger value="recent" className="text-xs md:text-sm">
+              Recent ({counts.recent})
+            </TabsTrigger>
+            <TabsTrigger value="public" className="text-xs md:text-sm">
+              Public ({counts.public})
+            </TabsTrigger>
+            <TabsTrigger value="private" className="text-xs md:text-sm">
+              Private ({counts.private})
+            </TabsTrigger>
+            <TabsTrigger value="folders" className="text-xs md:text-sm">
+              Folders ({counts.folders})
+            </TabsTrigger>
+          </TabsList>
+
+          <Button variant="outline" size="sm" className="gap-2 border-foreground/20">
+            <Filter className="h-4 w-4" />
+            Filter
+          </Button>
+        </div>
+
+        {/* Empty State Component */}
+        {filteredNotes.length === 0 && (
+          <div className="mt-8">
+            <GlassPanel className="p-12 text-center">
+              <div className="flex flex-col items-center gap-6">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                  <FolderOpen className="h-10 w-10 text-muted-foreground" />
+                </div>
+                <div className="max-w-md">
+                  <h3 className="text-xl font-semibold mb-2">
+                    {searchQuery ? "No notes match your search" : "No notes found"}
+                  </h3>
+                  <p className="text-muted-foreground mb-6">
+                    {searchQuery 
+                      ? "Try adjusting your search terms or browse all notes." 
+                      : "Create your first note from a YouTube video to get started with AI-powered learning."
+                    }
+                  </p>
+                  {!searchQuery && (
+                    <Button onClick={() => setIsCreateDialogOpen(true)} className="shadow-sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Your First Note
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </GlassPanel>
+          </div>
+        )}
+
+        {/* Notes Grid/List */}
+        {filteredNotes.length > 0 && (
+          <>
+            <TabsContent value="all" className="mt-8">
+              <NotesDisplay 
+                notes={filteredNotes} 
+                viewMode={viewMode}
+                onNoteClick={handleNoteClick}
+                onPrivacyChange={handlePrivacyChange}
+                onDelete={handleNoteDelete}
+              />
+            </TabsContent>
+
+            <TabsContent value="recent" className="mt-8">
+              <NotesDisplay 
+                notes={filteredNotes} 
+                viewMode={viewMode}
+                onNoteClick={handleNoteClick}
+                onPrivacyChange={handlePrivacyChange}
+                onDelete={handleNoteDelete}
+                badge="Recent"
+              />
+            </TabsContent>
+
+            <TabsContent value="public" className="mt-8">
+              <NotesDisplay 
+                notes={filteredNotes} 
+                viewMode={viewMode}
+                onNoteClick={handleNoteClick}
+                onPrivacyChange={handlePrivacyChange}
+                onDelete={handleNoteDelete}
+                badge="Public"
+              />
+            </TabsContent>
+
+            <TabsContent value="private" className="mt-8">
+              <NotesDisplay 
+                notes={filteredNotes} 
+                viewMode={viewMode}
+                onNoteClick={handleNoteClick}
+                onPrivacyChange={handlePrivacyChange}
+                onDelete={handleNoteDelete}
+                badge="Private"
+              />
+            </TabsContent>
+
+            <TabsContent value="folders" className="mt-8">
+              <NotesDisplay 
+                notes={filteredNotes} 
+                viewMode={viewMode}
+                onNoteClick={handleNoteClick}
+                onPrivacyChange={handlePrivacyChange}
+                onDelete={handleNoteDelete}
+                badge="Organized"
+              />
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
     </div>
   )
 }

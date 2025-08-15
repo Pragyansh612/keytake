@@ -380,12 +380,6 @@ export default function NotePage() {
       {/* Header */}
       <GlassPanel className="p-4 mb-6 border-foreground/10">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <Button variant="ghost" size="sm" className="gap-2" asChild>
-            <Link href="/dashboard">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Link>
-          </Button>
 
           <div className="flex-1 text-center md:text-left">
             <h1 className="text-xl md:text-2xl font-bold">{noteData.video_title}</h1>
