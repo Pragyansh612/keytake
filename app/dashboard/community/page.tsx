@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -37,7 +37,20 @@ import {
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
-export default function CommunityPage() {
+// Loading component for Suspense fallback
+function CommunityLoading() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center gap-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+        <p className="text-muted-foreground">Loading community content...</p>
+      </div>
+    </div>
+  )
+}
+
+// Main community component
+function CommunityContent() {
   const [publicNotes, setPublicNotes] = useState<PublicNoteResponse[]>([])
   const [certifiedCollections, setCertifiedCollections] = useState<CertifiedCollectionResponse[]>([])
   const [loading, setLoading] = useState(true)
@@ -171,14 +184,7 @@ export default function CommunityPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
-          <p className="text-muted-foreground">Loading community content...</p>
-        </div>
-      </div>
-    )
+    return <CommunityLoading />
   }
 
   if (error) {
@@ -509,5 +515,14 @@ export default function CommunityPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+// Main exported component with Suspense wrapper
+export default function CommunityPage() {
+  return (
+    <Suspense fallback={<CommunityLoading />}>
+      <CommunityContent />
+    </Suspense>
   )
 }
