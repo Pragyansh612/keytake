@@ -111,7 +111,9 @@ export const authUtils = {
   isTokenExpired: (token: string): boolean => {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      return Date.now() >= payload.exp * 1000;
+      const now = Math.floor(Date.now() / 1000);
+      // Add 30 second buffer to avoid edge cases
+      return now >= (payload.exp - 30);
     } catch {
       return true;
     }
@@ -154,22 +156,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (error) {
       console.error('Token refresh failed:', error);
-      await signOut();
+      // Don't call signOut here to avoid recursion
+      await authUtils.clearTokens();
+      setUser(null);
+      setProfile(null);
       return false;
     } finally {
       setRefreshing(false);
     }
   }, [refreshing]);
 
-  // Enhanced API request function with automatic token refresh
-  const authenticatedRequest = useCallback(async (url: string, options: RequestInit = {}) => {
+  // Fixed authenticatedRequest function
+  const authenticatedRequest = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
     let accessToken = authUtils.getAccessToken();
     
+    if (!accessToken) {
+      throw new Error('No access token available');
+    }
+
     // Check if token is expired and refresh if needed
-    if (accessToken && authUtils.isTokenExpired(accessToken)) {
+    if (authUtils.isTokenExpired(accessToken)) {
+      console.log('Token expired, attempting refresh...');
       const refreshed = await refreshToken();
       if (!refreshed) {
-        throw new Error('Authentication required');
+        throw new Error('Authentication required. Please log in again.');
       }
       accessToken = authUtils.getAccessToken();
     }
@@ -183,70 +193,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const response = await fetch(url, {
       ...options,
       headers,
-      credentials: 'include', // Include cookies
+      credentials: 'include',
     });
 
-    // If we get 401/403, try to refresh token once
-    const retryHeader = headers.get('X-Retry');
-    if ((response.status === 401 || response.status === 403) && !retryHeader) {
+    // If we get 401/403, try to refresh token once more
+    if ((response.status === 401 || response.status === 403)) {
+      console.log('Got 401/403, trying token refresh...');
       const refreshed = await refreshToken();
       if (refreshed) {
         const newToken = authUtils.getAccessToken();
-        const retryHeaders = new Headers(options.headers);
-        retryHeaders.set('Content-Type', 'application/json');
-        retryHeaders.set('X-Retry', 'true');
         if (newToken) {
+          const retryHeaders = new Headers(options.headers);
+          retryHeaders.set('Content-Type', 'application/json');
           retryHeaders.set('Authorization', `Bearer ${newToken}`);
+          
+          const retryResponse = await fetch(url, {
+            ...options,
+            headers: retryHeaders,
+            credentials: 'include',
+          });
+          
+          if (retryResponse.status === 401 || retryResponse.status === 403) {
+            // Still failing after refresh, user needs to login
+            await authUtils.clearTokens();
+            setUser(null);
+            setProfile(null);
+            throw new Error('Authentication required. Please log in again.');
+          }
+          
+          return retryResponse;
         }
-        
-        return fetch(url, {
-          ...options,
-          headers: retryHeaders,
-          credentials: 'include',
-        });
       }
+      
+      // Refresh failed or no new token
+      throw new Error('Authentication required. Please log in again.');
     }
 
     return response;
   }, [refreshToken]);
 
-  // Check authentication on mount and set up token refresh interval
+  // Check authentication on mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // First check auth status via API route
-        const authStatus = await fetch('/api/auth/check', {
-          credentials: 'include'
-        });
+        const token = authUtils.getAccessToken();
+        const userData = localStorage.getItem('user_data');
         
-        if (authStatus.ok) {
-          const authData = await authStatus.json();
-          
-          if (authData.authenticated && authData.user) {
-            setUser(authData.user);
-            // Sync localStorage if needed
-            const localToken = authUtils.getAccessToken();
-            if (!localToken) {
-              // Token exists in cookie but not localStorage, might need to handle this
-              console.log('Token exists in cookie but not localStorage');
-            }
-          } else if (authData.expired) {
-            // Try to refresh
-            const refreshed = await refreshToken();
-            if (!refreshed) {
-              await authUtils.clearTokens();
-            }
-          } else {
-            await authUtils.clearTokens();
-          }
-        } else {
-          // Fallback to localStorage check
-          const token = authUtils.getAccessToken();
-          const userData = localStorage.getItem('user_data');
-          
-          if (token && userData && !authUtils.isTokenExpired(token)) {
-            try {
-              const user = JSON.parse(userData);
+        if (token && userData) {
+          try {
+            const user = JSON.parse(userData);
+            
+            // Check if token is valid by making a simple API call
+            if (!authUtils.isTokenExpired(token)) {
               setUser(user);
               
               // Sync cookie with localStorage token
@@ -254,14 +252,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ accessToken: token })
-              });
-            } catch (error) {
-              console.error('Error parsing user data:', error);
-              await authUtils.clearTokens();
+              }).catch(console.error);
+            } else {
+              // Token expired, try to refresh
+              const refreshed = await refreshToken();
+              if (refreshed) {
+                setUser(user);
+              } else {
+                await authUtils.clearTokens();
+              }
             }
-          } else {
+          } catch (error) {
+            console.error('Error parsing user data:', error);
             await authUtils.clearTokens();
           }
+        } else {
+          await authUtils.clearTokens();
         }
       } catch (error) {
         console.error('Error checking auth:', error);
@@ -272,16 +278,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     checkAuth();
-
-    // Set up token refresh interval (every 45 minutes)
-    const interval = setInterval(() => {
-      const token = authUtils.getAccessToken();
-      if (token && !authUtils.isTokenExpired(token)) {
-        refreshToken();
-      }
-    }, 45 * 60 * 1000);
-
-    return () => clearInterval(interval);
   }, [refreshToken]);
 
   const signIn = async (email: string, password: string) => {
@@ -355,9 +351,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const token = authUtils.getAccessToken();
       if (token) {
-        await authenticatedRequest(`${BACKEND_URL}/auth/logout`, {
+        await fetch(`${BACKEND_URL}/auth/logout`, {
           method: 'POST',
-        });
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include',
+        }).catch(console.error); // Don't fail signOut on network error
       }
     } catch (error) {
       console.error('Error calling logout endpoint:', error);
