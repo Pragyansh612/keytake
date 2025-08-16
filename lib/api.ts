@@ -39,26 +39,23 @@ import {
 } from '../types/types';
 
 // Base API configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://keytake-backend.onrender.com';
 
 class ApiClient {
   private baseURL: string;
-  private token: string | null = null;
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
-    this.loadToken();
   }
 
-  // Token management
-  private loadToken() {
-    if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('access_token');
-    }
+  // Get current token from localStorage
+  private getToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('access_token');
   }
 
+  // Enhanced token management
   async setToken(token: string) {
-    this.token = token;
     if (typeof window !== 'undefined') {
       localStorage.setItem('access_token', token);
 
@@ -76,7 +73,6 @@ class ApiClient {
   }
 
   async clearToken() {
-    this.token = null;
     if (typeof window !== 'undefined') {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -98,11 +94,59 @@ class ApiClient {
       'Content-Type': 'application/json',
     };
 
-    if (includeAuth && this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
+    if (includeAuth) {
+      const token = this.getToken();
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
     }
 
     return headers;
+  }
+
+  private isTokenExpired(token: string): boolean {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const now = Math.floor(Date.now() / 1000);
+      return now >= (payload.exp - 60); // 60 second buffer
+    } catch {
+      return true;
+    }
+  }
+
+  private async refreshToken(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) return false;
+
+    try {
+      const response = await fetch(`${this.baseURL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        console.error('Token refresh failed:', response.status);
+        await this.clearToken();
+        return false;
+      }
+
+      const data = await response.json();
+      await this.setToken(data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      
+      console.log('Token refreshed successfully');
+      return true;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      await this.clearToken();
+      return false;
+    }
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -135,16 +179,48 @@ class ApiClient {
     includeAuth: boolean = true
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
+    
+    // Check token expiry and refresh if needed
+    if (includeAuth && typeof window !== 'undefined') {
+      const token = this.getToken();
+      if (token && this.isTokenExpired(token)) {
+        console.log('Token expired, attempting refresh...');
+        const refreshed = await this.refreshToken();
+        if (!refreshed) {
+          throw new Error('Authentication required. Please log in again.');
+        }
+      }
+    }
+
     const config: RequestInit = {
       ...options,
-      credentials: 'include', // Include cookies in requests
+      credentials: 'include',
       headers: {
         ...this.getHeaders(includeAuth),
         ...options.headers,
       },
     };
 
-    const response = await fetch(url, config);
+    let response = await fetch(url, config);
+
+    // If we get auth error and haven't already tried refresh, try once
+    if ((response.status === 401 || response.status === 403) && includeAuth) {
+      console.log('Got auth error, attempting token refresh...');
+      const refreshed = await this.refreshToken();
+      if (refreshed) {
+        // Retry with new token
+        const retryConfig: RequestInit = {
+          ...options,
+          credentials: 'include',
+          headers: {
+            ...this.getHeaders(includeAuth),
+            ...options.headers,
+          },
+        };
+        response = await fetch(url, retryConfig);
+      }
+    }
+
     return this.handleResponse<T>(response);
   }
 
@@ -181,6 +257,10 @@ class ApiClient {
         method: 'POST',
       });
       return response;
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if logout fails, clear local tokens
+      return { message: 'Logged out locally' };
     } finally {
       await this.clearToken();
     }
@@ -278,7 +358,6 @@ class ApiClient {
     }));
   }
 
-  // Also update getQuizDetails method:
   async getQuizDetails(quizId: string): Promise<QuizResponse> {
     const response = await this.request<any>(`/learning-aids/quizzes/${quizId}`);
 
@@ -414,7 +493,7 @@ class ApiClient {
     return this.request<RecommendationResponse[]>('/learning-journeys/recommendations');
   }
 
-  // Add this method to your existing ApiClient class
+  // Flashcards endpoint
   async getFlashcards(noteId?: string): Promise<FlashcardWithProgressResponse[]> {
     const query = noteId ? `?note_id=${noteId}` : '';
     const response = await this.request<Array<{
@@ -448,7 +527,7 @@ class ApiClient {
     }));
   }
 
-  // FIXED: Update the quiz attempt method to send answers as an object/dictionary
+  // Quiz attempt submission
   async submitQuizAttempt(quizId: string, data: QuizAttemptRequest): Promise<QuizAttemptResponse> {
     // Transform the array of answers to a dictionary format that the backend expects
     const answersDict: Record<string, string> = {};
@@ -475,9 +554,15 @@ class ApiClient {
 
   // Export endpoints
   async exportNote(noteId: string, format: ExportFormats): Promise<Blob> {
+    const token = this.getToken();
+    const headers: HeadersInit = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${this.baseURL}/export/notes/${noteId}?format=${format}`, {
       credentials: 'include',
-      headers: this.getHeaders(),
+      headers,
     });
 
     if (!response.ok) {
@@ -526,11 +611,11 @@ class ApiClient {
   }
 
   async shareNoteByEmail(noteId: string, data: NoteShareByEmailRequest): Promise<NoteShareResponse> {
-  return this.request<NoteShareResponse>(`/collaboration/notes/${noteId}/share-by-email`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+    return this.request<NoteShareResponse>(`/collaboration/notes/${noteId}/share-by-email`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 // Create and export a singleton instance

@@ -44,6 +44,7 @@ type AuthContextType = {
     data: any | null;
   }>;
   refreshToken: () => Promise<boolean>;
+  getAuthHeaders: () => HeadersInit;
 };
 
 export type SignUpData = {
@@ -79,6 +80,7 @@ export const authUtils = {
       });
     } catch (error) {
       console.error('Failed to set auth cookie:', error);
+      // Don't throw - cookie setting is optional
     }
   },
 
@@ -105,6 +107,7 @@ export const authUtils = {
       });
     } catch (error) {
       console.error('Failed to clear auth cookie:', error);
+      // Don't throw - cookie clearing is optional
     }
   },
 
@@ -112,8 +115,8 @@ export const authUtils = {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       const now = Math.floor(Date.now() / 1000);
-      // Add 30 second buffer to avoid edge cases
-      return now >= (payload.exp - 30);
+      // Add 60 second buffer to avoid edge cases
+      return now >= (payload.exp - 60);
     } catch {
       return true;
     }
@@ -129,15 +132,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isAuthenticated = Boolean(user);
 
+  // Get auth headers for API calls
+  const getAuthHeaders = useCallback((): HeadersInit => {
+    const token = authUtils.getAccessToken();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    
+    return headers;
+  }, []);
+
   // Token refresh function
   const refreshToken = useCallback(async (): Promise<boolean> => {
     if (refreshing) return false;
     
     const refreshTokenValue = authUtils.getRefreshToken();
-    if (!refreshTokenValue) return false;
+    if (!refreshTokenValue) {
+      console.log('No refresh token available');
+      return false;
+    }
 
     setRefreshing(true);
     try {
+      console.log('Attempting token refresh...');
       const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
         method: 'POST',
         headers: {
@@ -148,15 +169,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!response.ok) {
+        console.error('Token refresh failed with status:', response.status);
         throw new Error('Token refresh failed');
       }
 
       const data = await response.json();
+      console.log('Token refresh successful');
       await authUtils.setTokens(data.access_token, data.refresh_token);
       return true;
     } catch (error) {
       console.error('Token refresh failed:', error);
-      // Don't call signOut here to avoid recursion
+      // Clear tokens on refresh failure
       await authUtils.clearTokens();
       setUser(null);
       setProfile(null);
@@ -166,7 +189,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [refreshing]);
 
-  // Fixed authenticatedRequest function
+  // Enhanced request function with better error handling
   const authenticatedRequest = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
     let accessToken = authUtils.getAccessToken();
     
@@ -190,15 +213,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       ...options,
       headers,
       credentials: 'include',
     });
 
-    // If we get 401/403, try to refresh token once more
-    if ((response.status === 401 || response.status === 403)) {
-      console.log('Got 401/403, trying token refresh...');
+    // If we get 401/403, try to refresh token once
+    if ((response.status === 401 || response.status === 403) && !refreshing) {
+      console.log('Got auth error, trying token refresh...');
       const refreshed = await refreshToken();
       if (refreshed) {
         const newToken = authUtils.getAccessToken();
@@ -207,30 +230,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           retryHeaders.set('Content-Type', 'application/json');
           retryHeaders.set('Authorization', `Bearer ${newToken}`);
           
-          const retryResponse = await fetch(url, {
+          response = await fetch(url, {
             ...options,
             headers: retryHeaders,
             credentials: 'include',
           });
           
-          if (retryResponse.status === 401 || retryResponse.status === 403) {
-            // Still failing after refresh, user needs to login
+          if (response.status === 401 || response.status === 403) {
+            // Still failing after refresh, clear auth state
             await authUtils.clearTokens();
             setUser(null);
             setProfile(null);
             throw new Error('Authentication required. Please log in again.');
           }
-          
-          return retryResponse;
         }
+      } else {
+        // Refresh failed, clear auth state
+        await authUtils.clearTokens();
+        setUser(null);
+        setProfile(null);
+        throw new Error('Authentication required. Please log in again.');
       }
-      
-      // Refresh failed or no new token
-      throw new Error('Authentication required. Please log in again.');
     }
 
     return response;
-  }, [refreshToken]);
+  }, [refreshToken, refreshing]);
 
   // Check authentication on mount
   useEffect(() => {
@@ -239,34 +263,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const token = authUtils.getAccessToken();
         const userData = localStorage.getItem('user_data');
         
-        if (token && userData) {
+        if (token && userData && !authUtils.isTokenExpired(token)) {
           try {
             const user = JSON.parse(userData);
+            console.log('Found valid token, setting user:', user);
+            setUser(user);
             
-            // Check if token is valid by making a simple API call
-            if (!authUtils.isTokenExpired(token)) {
-              setUser(user);
-              
-              // Sync cookie with localStorage token
+            // Sync cookie with localStorage token
+            try {
               await fetch('/api/auth/set-cookie', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ accessToken: token })
-              }).catch(console.error);
-            } else {
-              // Token expired, try to refresh
-              const refreshed = await refreshToken();
-              if (refreshed) {
-                setUser(user);
-              } else {
-                await authUtils.clearTokens();
-              }
+              });
+            } catch (error) {
+              console.error('Failed to sync cookie:', error);
             }
           } catch (error) {
             console.error('Error parsing user data:', error);
             await authUtils.clearTokens();
           }
+        } else if (token && authUtils.isTokenExpired(token)) {
+          console.log('Token expired on mount, attempting refresh...');
+          const refreshed = await refreshToken();
+          if (refreshed && userData) {
+            try {
+              const user = JSON.parse(userData);
+              setUser(user);
+            } catch (error) {
+              console.error('Error parsing user data after refresh:', error);
+              await authUtils.clearTokens();
+            }
+          }
         } else {
+          console.log('No valid token found, clearing auth state');
           await authUtils.clearTokens();
         }
       } catch (error) {
@@ -282,6 +312,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('Attempting login...');
       const response = await fetch(`${BACKEND_URL}/auth/login`, {
         method: 'POST',
         headers: {
@@ -294,9 +325,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await response.json();
 
       if (!response.ok) {
+        console.error('Login failed:', data);
         return { error: { message: data.detail || 'Login failed' }, data: null };
       }
 
+      console.log('Login successful, storing tokens...');
+      
       // Store tokens securely
       await authUtils.setTokens(data.access_token, data.refresh_token);
       
@@ -305,6 +339,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('user_data', JSON.stringify(userData));
       
       setUser(userData);
+      console.log('User state set:', userData);
 
       return { error: null, data };
     } catch (error) {
@@ -413,7 +448,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: null, data };
     } catch (error) {
       console.error('Error updating profile:', error);
-      return { error: { message: 'Network error' }, data: null };
+      const errorMessage = error instanceof Error ? error.message : 'Network error';
+      return { error: { message: errorMessage }, data: null };
     }
   };
 
@@ -428,6 +464,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     resetPassword,
     updateProfile,
     refreshToken,
+    getAuthHeaders,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

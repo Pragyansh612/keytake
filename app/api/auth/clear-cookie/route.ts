@@ -1,20 +1,21 @@
-// app/api/auth/clear-cookie/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const response = NextResponse.json({ success: true });
-    
-    // Clear the auth cookie
-    response.cookies.delete('access_token');
-    
+
+    // Clear the cookie by setting it with maxAge 0
+    response.cookies.set('access_token', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 0,
+      path: '/',
+    });
+
     return response;
   } catch (error) {
-    console.error('Error clearing auth cookie:', error);
-    return NextResponse.json(
-      { error: 'Failed to clear authentication cookie' }, 
-      { status: 500 }
-    );
+    console.error('Error clearing cookie:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
