@@ -4,15 +4,33 @@ import { usePathname, useSearchParams } from "next/navigation"
 import Script from "next/script"
 import { useEffect } from "react"
 
+// Extend Window interface to include gtag
+declare global {
+  interface Window {
+    gtag: (command: string, targetId: string, config?: any) => void
+  }
+}
+
 export function Analytics() {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
+  
+  // Use try-catch or conditional rendering to handle useSearchParams
+  let searchParams
+  try {
+    searchParams = useSearchParams()
+  } catch (error) {
+    // Handle the case where useSearchParams is not available during SSR
+    searchParams = new URLSearchParams()
+  }
 
   useEffect(() => {
     // Track page views when route changes
-    if (window.gtag) {
+    if (typeof window !== 'undefined' && window.gtag) {
+      const searchString = searchParams ? searchParams.toString() : ''
+      const fullPath = pathname + (searchString ? `?${searchString}` : '')
+      
       window.gtag("config", "G-MEASUREMENT_ID", {
-        page_path: pathname + searchParams.toString(),
+        page_path: fullPath,
       })
     }
   }, [pathname, searchParams])
