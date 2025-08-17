@@ -24,6 +24,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
+  BookOpen,
+  Target,
 } from "lucide-react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
@@ -42,6 +44,12 @@ interface Section {
   points?: string[]
   keyPoints?: string[]
   timestamp?: string
+  summary?: string
+  detailed_content?: string[]
+  learning_objectives?: string[]
+  questions_for_reflection?: string[]
+  examples_and_applications?: string[]
+  terminology?: Record<string, string>
 }
 
 interface ProcessingStatus {
@@ -49,6 +57,29 @@ interface ProcessingStatus {
   stage?: string
   error?: string
   error_type?: string
+}
+
+interface ParsedNoteContent {
+  sections?: Section[]
+  key_definitions?: Record<string, string>
+  learning_timestamps?: Array<{
+    time: string
+    topic: string
+    importance: string
+    description: string
+  }>
+  study_strategies?: string[]
+  detailed_sections?: Array<{
+    title: string
+    summary: string
+    timestamp: string
+    key_points: string[]
+    terminology: Record<string, string>
+    detailed_content: string[]
+    learning_objectives: string[]
+    questions_for_reflection: string[]
+    examples_and_applications: string[]
+  }>
 }
 
 export default function NotePage() {
@@ -158,13 +189,15 @@ export default function NotePage() {
         return `Note generation failed: ${noteData.content.error || 'Unknown error'}`
       }
 
-      // Handle normal content structure
-      if (noteData.content.sections) {
-        return noteData.content.sections.map((section: any, index: number) =>
-          `${index + 1}. ${section.title || `Section ${index + 1}`}\n\n${section.content || section.text || ""
-          }\n\n${section.points ? section.points.map((point: string) => `• ${point}`).join('\n') : ""
-          }${section.keyPoints ? section.keyPoints.map((point: string) => `• ${point}`).join('\n') : ""
-          }\n\n`
+      // Handle parsed content structure
+      const parsedContent = parseNoteContent()
+      if (parsedContent.sections && parsedContent.sections.length > 0) {
+        return parsedContent.sections.map((section, index) =>
+          `${section.title}\n\n${section.summary || section.content || ""}\n\n${
+            section.keyPoints && section.keyPoints.length > 0 
+              ? section.keyPoints.map(point => `• ${point}`).join('\n') + '\n\n'
+              : ""
+          }`
         ).join("")
       }
 
@@ -177,36 +210,45 @@ export default function NotePage() {
     return String(noteData.content)
   }
 
-  const parseNoteSections = (): Section[] => {
+  const parseNoteContent = (): ParsedNoteContent => {
     if (!noteData?.content || typeof noteData.content !== 'object') {
-      return []
+      return {}
     }
 
     // Skip if still processing
     const status = noteData.content.status
     if (status === 'pending' || status === 'processing' || status === 'failed') {
-      return []
+      return {}
     }
 
-    if (noteData.content.sections) {
-      return noteData.content.sections.map((section: any, index: number) => ({
+    // Return the content as parsed structure
+    return noteData.content as ParsedNoteContent
+  }
+
+  const parseNoteSections = (): Section[] => {
+    const parsedContent = parseNoteContent()
+    
+    // Try to get sections from detailed_sections first
+    if (parsedContent.detailed_sections && parsedContent.detailed_sections.length > 0) {
+      return parsedContent.detailed_sections.map((section, index) => ({
         id: String(index + 1),
-        title: section.title || `Section ${index + 1}`,
-        content: section.content || section.text || "",
-        points: section.points || [],
-        keyPoints: section.keyPoints || section.key_points || [],
-        timestamp: section.timestamp || section.time
+        title: section.title,
+        content: section.summary || '',
+        points: section.key_points || [],
+        keyPoints: [],
+        timestamp: section.timestamp,
+        summary: section.summary,
+        detailed_content: section.detailed_content,
+        learning_objectives: section.learning_objectives,
+        questions_for_reflection: section.questions_for_reflection,
+        examples_and_applications: section.examples_and_applications,
+        terminology: section.terminology
       }))
     }
 
-    // If content doesn't have sections but has other structure, create a single section
-    if (!noteData.content.status) {
-      return [{
-        id: "1",
-        title: "Content",
-        content: JSON.stringify(noteData.content, null, 2),
-        points: []
-      }]
+    // Fall back to sections if available
+    if (parsedContent.sections && parsedContent.sections.length > 0) {
+      return parsedContent.sections
     }
 
     return []
@@ -315,6 +357,52 @@ export default function NotePage() {
     return stageProgress[processingStatus.stage as keyof typeof stageProgress] || 20
   }
 
+  const renderKeyDefinitions = () => {
+    const parsedContent = parseNoteContent()
+    if (!parsedContent.key_definitions) return null
+
+    return (
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-4">
+          <BookOpen className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold">Key Definitions</h3>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {Object.entries(parsedContent.key_definitions).map(([term, definition]) => (
+            <div key={term} className="p-4 rounded-lg bg-muted/50 border">
+              <h4 className="font-medium text-primary mb-2">{term}</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">{definition}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const renderStudyStrategies = () => {
+    const parsedContent = parseNoteContent()
+    if (!parsedContent.study_strategies || parsedContent.study_strategies.length === 0) return null
+
+    return (
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Target className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold">Study Strategies</h3>
+        </div>
+        <div className="grid gap-2">
+          {parsedContent.study_strategies.map((strategy, index) => (
+            <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-medium text-primary mt-0.5">
+                {index + 1}
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">{strategy}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="container py-16 flex flex-col items-center justify-center min-h-[70vh]">
@@ -372,6 +460,7 @@ export default function NotePage() {
   }
 
   const sections = parseNoteSections()
+  const parsedContent = parseNoteContent()
   const isProcessing = processingStatus?.status === 'pending' || processingStatus?.status === 'processing'
   const hasFailed = processingStatus?.status === 'failed'
 
@@ -380,7 +469,6 @@ export default function NotePage() {
       {/* Header */}
       <GlassPanel className="p-4 mb-6 border-foreground/10">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-
           <div className="flex-1 text-center md:text-left">
             <h1 className="text-xl md:text-2xl font-bold">{noteData.video_title}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1 justify-center md:justify-start">
@@ -540,43 +628,142 @@ export default function NotePage() {
                         </p>
                       </div>
                     ) : (
-                      sections.map((section) => (
-                        <div key={section.id} className="border-b border-border/50 pb-6 last:border-b-0" id={`section-${section.id}`}>
-                          <div className="flex items-center gap-2 mb-3">
-                            <h2 className="text-xl font-semibold">
-                              {section.title}
-                            </h2>
-                            {section.timestamp && (
-                              <Badge variant="outline" className="gap-1">
-                                <Play className="h-3 w-3" />
-                                {section.timestamp}
-                              </Badge>
-                            )}
-                          </div>
+                      <>
+                        {/* Render Key Definitions */}
+                        {renderKeyDefinitions()}
 
-                          <div className="space-y-3">
-                            {section.content && (
-                              <p className="text-muted-foreground leading-relaxed">
-                                {section.content}
-                              </p>
-                            )}
+                        {/* Render Study Strategies */}
+                        {renderStudyStrategies()}
 
-                            {((section.points && section.points.length > 0) ||
-                              (section.keyPoints && section.keyPoints.length > 0)) && (
-                                <div className="pl-4 border-l-2 border-primary/20">
-                                  <h4 className="font-medium mb-2">Key Points:</h4>
+                        {/* Render Sections */}
+                        {sections.map((section) => (
+                          <div key={section.id} className="border-b border-border/50 pb-8 last:border-b-0" id={`section-${section.id}`}>
+                            <div className="flex items-center gap-2 mb-4">
+                              <h2 className="text-xl font-semibold">
+                                {section.title}
+                              </h2>
+                              {section.timestamp && (
+                                <Badge variant="outline" className="gap-1">
+                                  <Play className="h-3 w-3" />
+                                  {section.timestamp}
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="space-y-6">
+                              {/* Summary */}
+                              {section.summary && (
+                                <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                                  <h4 className="font-medium text-primary mb-2">Summary</h4>
+                                  <p className="text-muted-foreground leading-relaxed">
+                                    {section.summary}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Main content */}
+                              {section.content && section.content !== section.summary && (
+                                <div>
+                                  <p className="text-muted-foreground leading-relaxed">
+                                    {section.content}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Detailed Content */}
+                              {section.detailed_content && section.detailed_content.length > 0 && (
+                                <div>
+                                  <h4 className="font-medium mb-3">Detailed Content</h4>
+                                  <div className="space-y-3">
+                                    {section.detailed_content.map((content, index) => (
+                                      <p key={index} className="text-muted-foreground leading-relaxed pl-4 border-l-2 border-muted">
+                                        {content}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Key Points */}
+                              {((section.points && section.points.length > 0) ||
+                                (section.keyPoints && section.keyPoints.length > 0)) && (
+                                <div>
+                                  <h4 className="font-medium mb-3">Key Points</h4>
+                                  <div className="bg-muted/30 rounded-lg p-4">
+                                    <ul className="list-disc pl-6 space-y-2">
+                                      {[...(section.points || []), ...(section.keyPoints || [])].map((point, index) => (
+                                        <li key={index} className="text-muted-foreground leading-relaxed">
+                                          {point}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Learning Objectives */}
+                              {section.learning_objectives && section.learning_objectives.length > 0 && (
+                                <div>
+                                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                                    <Target className="h-4 w-4 text-primary" />
+                                    Learning Objectives
+                                  </h4>
                                   <ul className="list-disc pl-6 space-y-1">
-                                    {[...(section.points || []), ...(section.keyPoints || [])].map((point, index) => (
+                                    {section.learning_objectives.map((objective, index) => (
                                       <li key={index} className="text-muted-foreground">
-                                        {point}
+                                        {objective}
                                       </li>
                                     ))}
                                   </ul>
                                 </div>
                               )}
+
+                              {/* Terminology */}
+                              {section.terminology && Object.keys(section.terminology).length > 0 && (
+                                <div>
+                                  <h4 className="font-medium mb-3">Key Terms</h4>
+                                  <div className="grid gap-3 md:grid-cols-2">
+                                    {Object.entries(section.terminology).map(([term, definition]) => (
+                                      <div key={term} className="p-3 rounded-lg bg-muted/50 border">
+                                        <h5 className="font-medium text-primary text-sm">{term}</h5>
+                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{definition}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Examples and Applications */}
+                              {section.examples_and_applications && section.examples_and_applications.length > 0 && (
+                                <div>
+                                  <h4 className="font-medium mb-3">Examples & Applications</h4>
+                                  <ul className="list-disc pl-6 space-y-1">
+                                    {section.examples_and_applications.map((example, index) => (
+                                      <li key={index} className="text-muted-foreground">
+                                        {example}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {/* Reflection Questions */}
+                              {section.questions_for_reflection && section.questions_for_reflection.length > 0 && (
+                                <div>
+                                  <h4 className="font-medium mb-3">Questions for Reflection</h4>
+                                  <ul className="list-disc pl-6 space-y-1">
+                                    {section.questions_for_reflection.map((question, index) => (
+                                      <li key={index} className="text-muted-foreground">
+                                        {question}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </>
                     )}
                   </TabsContent>
 
@@ -676,6 +863,31 @@ export default function NotePage() {
                           {section.title}
                         </span>
                       </Button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* Learning Timeline */}
+            {parsedContent.learning_timestamps && parsedContent.learning_timestamps.length > 0 && !isProcessing && (
+              <div className="mb-6">
+                <h3 className="font-medium mb-3">Learning Timeline</h3>
+                <ScrollArea className="h-[250px]">
+                  <div className="space-y-3">
+                    {parsedContent.learning_timestamps.map((item, index) => (
+                      <div key={index} className="p-3 rounded-lg bg-muted/30 border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="outline" className="text-xs">
+                            {item.time}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">•</span>
+                          <span className="text-xs font-medium">{item.topic}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {item.description}
+                        </p>
+                      </div>
                     ))}
                   </div>
                 </ScrollArea>
