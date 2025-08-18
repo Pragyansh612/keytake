@@ -8,10 +8,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Search, FolderOpen, Plus, Filter, Loader2, RefreshCw, BookOpen, Grid3X3, List } from "lucide-react"
+import { Search, FolderOpen, Plus, Filter, Loader2, RefreshCw, BookOpen, Grid3X3, List, Trash2, MoreHorizontal } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu"
 import { api } from "@/lib/api"
 import { NoteResponse } from "@/types/types"
 import { useRouter } from "next/navigation"
+import { DeleteNoteModal } from "@/components/delete-note-modal"
+import { toast } from "sonner"
 
 export default function NotesPage() {
   const [notes, setNotes] = useState<NoteResponse[]>([])
@@ -24,6 +33,18 @@ export default function NotesPage() {
   const [videoTitle, setVideoTitle] = useState("")
   const [refreshing, setRefreshing] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    noteId: string;
+    noteTitle: string;
+    isDeleting: boolean;
+  }>({
+    isOpen: false,
+    noteId: '',
+    noteTitle: '',
+    isDeleting: false
+  })
+  
   const router = useRouter()
 
   // Load notes on component mount
@@ -40,6 +61,7 @@ export default function NotesPage() {
       setNotes(notesData)
     } catch (error) {
       console.error("Failed to load notes:", error)
+      toast.error("Failed to load notes")
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -55,7 +77,7 @@ export default function NotesPage() {
       // Extract video ID from YouTube URL
       const videoId = extractVideoId(videoUrl)
       if (!videoId) {
-        alert("Please enter a valid YouTube URL")
+        toast.error("Please enter a valid YouTube URL")
         return
       }
 
@@ -71,13 +93,14 @@ export default function NotesPage() {
       
       // Refresh notes list to show the new note
       loadNotes(true)
+      toast.success("Note creation started! Redirecting to note...")
       
       // Redirect to the notes page to show generation progress
       router.push(`/dashboard/notes/${response.note_id}`)
       
     } catch (error) {
       console.error("Failed to create note:", error)
-      alert("Failed to create note. Please try again.")
+      toast.error("Failed to create note. Please try again.")
     } finally {
       setIsCreating(false)
     }
@@ -89,7 +112,8 @@ export default function NotesPage() {
     return match ? match[1] : null
   }
 
-  const handlePrivacyChange = (noteId: string, isPublic: boolean) => {
+  const handlePrivacyChange = async (noteId: string, isPublic: boolean) => {
+    try {
     setNotes(prevNotes => 
       prevNotes.map(note => 
         note.id === noteId 
@@ -97,10 +121,44 @@ export default function NotesPage() {
           : note
       )
     )
+      toast.success(`Note made ${isPublic ? 'public' : 'private'}`)
+    } catch (error) {
+      console.error("Failed to update note privacy:", error)
+      toast.error("Failed to update note privacy")
+    }
   }
 
-  const handleNoteDelete = (noteId: string) => {
-    setNotes(prevNotes => prevNotes.filter(note => note.id !== noteId))
+  const handleDeleteNote = (noteId: string, noteTitle: string) => {
+    setDeleteModal({
+      isOpen: true,
+      noteId,
+      noteTitle,
+      isDeleting: false
+    })
+  }
+
+  const confirmDeleteNote = async () => {
+    try {
+      setDeleteModal(prev => ({ ...prev, isDeleting: true }))
+      
+      await api.deleteNote(deleteModal.noteId)
+      
+      // Remove the note from the local state
+      setNotes(prevNotes => prevNotes.filter(note => note.id !== deleteModal.noteId))
+      
+      toast.success("Note deleted successfully")
+      
+      setDeleteModal({
+        isOpen: false,
+        noteId: '',
+        noteTitle: '',
+        isDeleting: false
+      })
+    } catch (error) {
+      console.error("Failed to delete note:", error)
+      toast.error("Failed to delete note. Please try again.")
+      setDeleteModal(prev => ({ ...prev, isDeleting: false }))
+    }
   }
 
   const filteredNotes = notes.filter(note => {
@@ -323,7 +381,7 @@ export default function NotesPage() {
                 viewMode={viewMode}
                 onNoteClick={handleNoteClick}
                 onPrivacyChange={handlePrivacyChange}
-                onDelete={handleNoteDelete}
+                onDelete={handleDeleteNote}
               />
             </TabsContent>
 
@@ -333,7 +391,7 @@ export default function NotesPage() {
                 viewMode={viewMode}
                 onNoteClick={handleNoteClick}
                 onPrivacyChange={handlePrivacyChange}
-                onDelete={handleNoteDelete}
+                onDelete={handleDeleteNote}
                 badge="Recent"
               />
             </TabsContent>
@@ -344,7 +402,7 @@ export default function NotesPage() {
                 viewMode={viewMode}
                 onNoteClick={handleNoteClick}
                 onPrivacyChange={handlePrivacyChange}
-                onDelete={handleNoteDelete}
+                onDelete={handleDeleteNote}
                 badge="Public"
               />
             </TabsContent>
@@ -355,7 +413,7 @@ export default function NotesPage() {
                 viewMode={viewMode}
                 onNoteClick={handleNoteClick}
                 onPrivacyChange={handlePrivacyChange}
-                onDelete={handleNoteDelete}
+                onDelete={handleDeleteNote}
                 badge="Private"
               />
             </TabsContent>
@@ -366,13 +424,22 @@ export default function NotesPage() {
                 viewMode={viewMode}
                 onNoteClick={handleNoteClick}
                 onPrivacyChange={handlePrivacyChange}
-                onDelete={handleNoteDelete}
+                onDelete={handleDeleteNote}
                 badge="Organized"
               />
             </TabsContent>
           </>
         )}
       </Tabs>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteNoteModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+        onConfirm={confirmDeleteNote}
+        noteTitle={deleteModal.noteTitle}
+        isDeleting={deleteModal.isDeleting}
+      />
     </div>
   )
 }
@@ -390,7 +457,7 @@ function NotesDisplay({
   viewMode: 'grid' | 'list'
   onNoteClick: (noteId: string) => void
   onPrivacyChange: (noteId: string, isPublic: boolean) => void
-  onDelete: (noteId: string) => void
+  onDelete: (noteId: string, noteTitle: string) => void
   badge?: string
 }) {
   if (viewMode === 'grid') {
@@ -410,7 +477,7 @@ function NotesDisplay({
             viewCount={note.view_count}
             isPublic={note.is_public}
             onPrivacyChange={onPrivacyChange}
-            onDelete={onDelete}
+            onDelete={() => onDelete(note.id, note.video_title)}
           />
         ))}
       </div>
@@ -421,34 +488,53 @@ function NotesDisplay({
     <div className="space-y-4">
       {notes.map((note) => (
         <GlassPanel key={note.id} className="p-6 hover:bg-foreground/[0.02] transition-colors">
-          <div 
-            className="flex items-center gap-6 cursor-pointer"
-            onClick={() => onNoteClick(note.id)}
-          >
-            <div className="w-24 h-16 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center flex-shrink-0">
-              <BookOpen className="h-6 w-6 text-blue-600" />
-            </div>
-            
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-lg mb-2 truncate">{note.video_title}</h3>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span>Created {new Date(note.created_at).toLocaleDateString()}</span>
-                <span>•</span>
-                <span>{note.view_count} views</span>
-                <span>•</span>
-                <span className={note.is_public ? "text-green-600" : "text-orange-600"}>
-                  {note.is_public ? "Public" : "Private"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-3">
-                {badge && (
-                  <span className="px-2 py-1 bg-foreground/10 text-foreground rounded-md text-xs font-medium">
-                    {badge}
-                  </span>
+          <div className="flex items-center gap-6">
+            <div 
+              className="flex-1 flex items-center gap-6 cursor-pointer min-w-0"
+              onClick={() => onNoteClick(note.id)}
+            >
+              {/* Thumbnail Image for List View */}
+              <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20">
+                {note.video_thumbnail_url ? (
+                  <img 
+                    src={note.video_thumbnail_url} 
+                    alt={note.video_title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <BookOpen className="h-6 w-6 text-blue-600" />
+                  </div>
                 )}
-                <span className="px-2 py-1 bg-blue-500/10 text-blue-600 rounded-md text-xs font-medium">
-                  AI Generated
-                </span>
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-lg mb-2 truncate">{note.video_title}</h3>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>Created {new Date(note.created_at).toLocaleDateString()}</span>
+                  <span>•</span>
+                  <span>{note.view_count} views</span>
+                  <span>•</span>
+                  <span className={note.is_public ? "text-green-600" : "text-orange-600"}>
+                    {note.is_public ? "Public" : "Private"}
+                  </span>
+                  {note.video_duration && (
+                    <>
+                      <span>•</span>
+                      <span>{Math.floor(note.video_duration / 60)}:{(note.video_duration % 60).toString().padStart(2, '0')}</span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-3">
+                  {badge && (
+                    <span className="px-2 py-1 bg-foreground/10 text-foreground rounded-md text-xs font-medium">
+                      {badge}
+                    </span>
+                  )}
+                  <span className="px-2 py-1 bg-blue-500/10 text-blue-600 rounded-md text-xs font-medium">
+                    AI Generated
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -463,6 +549,43 @@ function NotesDisplay({
               >
                 {note.is_public ? "Make Private" : "Make Public"}
               </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => onNoteClick(note.id)}>
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Open Note
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onPrivacyChange(note.id, !note.is_public)
+                    }}
+                  >
+                    {note.is_public ? "Make Private" : "Make Public"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDelete(note.id, note.video_title)
+                    }}
+                    className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Note
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </GlassPanel>
